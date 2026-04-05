@@ -2,6 +2,56 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from datetime import date
 
+class Category(models.Model):
+    name = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name='分类名称'
+    )
+    description = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name='分类描述'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='更新时间'
+    )
+    
+    class Meta:
+        verbose_name = '图书分类'
+        verbose_name_plural = '图书分类'
+    
+    def __str__(self):
+        return self.name
+
+class Tag(models.Model):
+    name = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name='标签名称'
+    )
+    color = models.CharField(
+        max_length=7,
+        default='#409eff',
+        verbose_name='标签颜色'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+    
+    class Meta:
+        verbose_name = '图书标签'
+        verbose_name_plural = '图书标签'
+    
+    def __str__(self):
+        return self.name
+
 class User(AbstractUser):
     STUDENT_ID_MAX_LENGTH = 20
     ROLE_CHOICES = [
@@ -46,8 +96,12 @@ class Book(models.Model):
         unique=True,
         verbose_name='ISBN'
     )
-    category = models.CharField(
-        max_length=CATEGORY_MAX_LENGTH,
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='books',
         verbose_name='分类'
     )
     publisher = models.CharField(
@@ -89,6 +143,12 @@ class Book(models.Model):
         null=True,
         blank=True,
         verbose_name='内容简介'
+    )
+    tags = models.ManyToManyField(
+        'Tag',
+        related_name='books',
+        blank=True,
+        verbose_name='标签'
     )
     
     class Meta:
@@ -143,3 +203,140 @@ class BorrowRecord(models.Model):
     class Meta:
         verbose_name = '借阅记录'
         verbose_name_plural = '借阅记录'
+
+class Reservation(models.Model):
+    STATUS_CHOICES = [
+        ('pending', '等待中'),
+        ('confirmed', '已确认'),
+        ('cancelled', '已取消'),
+    ]
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='reservations',
+        verbose_name='用户'
+    )
+    book = models.ForeignKey(
+        Book,
+        on_delete=models.CASCADE,
+        related_name='reservations',
+        verbose_name='图书'
+    )
+    reservation_date = models.DateField(
+        default=date.today,
+        verbose_name='预约日期'
+    )
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='状态'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='更新时间'
+    )
+    
+    class Meta:
+        verbose_name = '预约记录'
+        verbose_name_plural = '预约记录'
+        unique_together = ('user', 'book', 'status')
+
+class Notification(models.Model):
+    TYPE_CHOICES = [
+        ('borrow_due', '借阅到期提醒'),
+        ('reservation_confirmed', '预约确认通知'),
+        ('book_available', '图书可借通知'),
+    ]
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        verbose_name='用户'
+    )
+    type = models.CharField(
+        max_length=25,
+        choices=TYPE_CHOICES,
+        verbose_name='通知类型'
+    )
+    title = models.CharField(
+        max_length=200,
+        verbose_name='通知标题'
+    )
+    message = models.TextField(
+        verbose_name='通知内容'
+    )
+    is_read = models.BooleanField(
+        default=False,
+        verbose_name='是否已读'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+    
+    class Meta:
+        verbose_name = '通知'
+        verbose_name_plural = '通知'
+        ordering = ['-created_at']
+
+class Comment(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='comments',
+        verbose_name='用户'
+    )
+    book = models.ForeignKey(
+        Book,
+        on_delete=models.CASCADE,
+        related_name='comments',
+        verbose_name='图书'
+    )
+    content = models.TextField(
+        verbose_name='评论内容'
+    )
+    rating = models.IntegerField(
+        choices=[(i, f'{i}星') for i in range(1, 6)],
+        verbose_name='评分'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='更新时间'
+    )
+    
+    class Meta:
+        verbose_name = '评论'
+        verbose_name_plural = '评论'
+        ordering = ['-created_at']
+
+class Collection(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='collections',
+        verbose_name='用户'
+    )
+    book = models.ForeignKey(
+        Book,
+        on_delete=models.CASCADE,
+        related_name='collections',
+        verbose_name='图书'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+    
+    class Meta:
+        verbose_name = '收藏'
+        verbose_name_plural = '收藏'
+        unique_together = ('user', 'book')  # 每个用户对每本书只能收藏一次
